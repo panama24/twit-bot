@@ -1,0 +1,33 @@
+const axios = require('axios');
+const cheerio = require('cheerio');
+
+const URL = 'https://factba.se/topic/calendar';
+
+const removeWhiteSpace = str => str.replace(/\s\s+/g, ' ');
+
+let getData = html => {
+  // data = [];
+  const $ = cheerio.load(html);
+
+  // const monthlyStats = $('.agenda-month', '#calendar_rows').text();
+  // console.log(removeWhiteSpace(monthlyStats).split('\t'));
+
+  const agendaDates = $('.agenda-date', '#calendar_rows').text();
+  const agendaDatesArray = removeWhiteSpace(agendaDates).split(',');
+  agendaDatesArray.map(el => data.push({
+    day: el[0],
+    month: el[1],
+    shortdate: el[2],
+  }))
+  console.log(agendaDatesArray);
+
+  // const agendaEvents = $('.agenda-event', '#calendar_rows').text();
+  // console.log(removeWhiteSpace(agendaEvents).split(','));
+};
+
+axios.get(URL)
+  .then(resp => {
+    getData(resp.data);
+  }).catch(error => {
+    console.log('ERR:', error);
+  });

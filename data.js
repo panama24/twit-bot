@@ -8,25 +8,41 @@ const removeWhiteSpace = str => str.replace(/\s\s+/g, ' ');
 let getData = html => {
   data = [];
   const $ = cheerio.load(html);
+  // const monthlyStats = $('.agenda-month', '#calendar_rows').text();
+  // const sanitizedMonthlyStats = removeWhiteSpace(monthlyStats).split('\t');
 
-  const monthlyStats = $('.agenda-month', '#calendar_rows').text();
-  const sanitizedMonthlyStats = removeWhiteSpace(monthlyStats).split('\t');
+  const calendarRows = $('#calendar_rows').each((i, row) => {
+    // const array = $('td').toArray();
 
-  const agendaDates = $('.agenda-date', '#calendar_rows').text();
-  const agendaDatesArray = removeWhiteSpace(agendaDates).split(',');
+    ////////////////
 
-  const agendaEvents = $('.agenda-event', '#calendar_rows').contents().length;
-  $('.agenda-event', '#calendar_rows').each((i, el) => {
-    const splitText = $(el).text().split('\n');
-    const textArray = splitText.map(t => t.trim()).filter(s => s);
+    const dates = $('td[class=agenda-date]').toArray();
 
-    data.push({
-      id: i,
-      textArray
+    $(dates).each((i, date) => {
+      const rowspan = Number($(date).attr('rowspan'));
+      const dateObj = $(date)
+        .text()
+        .replace(/[\n\t\r]/g,"")
+        .split(', ')
+        .join();
+
+      // grab sibling trs X rowspan
+
+      data.push({
+        date: dateObj,
+        rowspan,
+      });
     });
+    console.log(data);
   });
 
-  console.log(data);
+  const agendaTimes = $('.agenda-time', '#calendar_rows').each((i, time) => {
+    const agendaTime = $(time).text().replace(/[\n\t\r]/g,"");
+    const agendaEvent = $(time).siblings('td').text().replace(/[\n\t\r]/g,"");
+
+    // console.log('TIME:', agendaTime + '\n');
+    // console.log('EVENT:', agendaEvent + '\n')
+  });
 };
 
 axios.get(URL)

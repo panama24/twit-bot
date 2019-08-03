@@ -8,6 +8,20 @@ var options = {
   count: 10,
 };
 
-T.get('statuses/user_timeline', options, function(err, data, response) {
-  return data.map(d => console.log(d.text));
-});
+const getTweets = () => {
+  const promise = new Promise((resolve, reject) => {
+    T.get('statuses/user_timeline', options, function(err, data, response) {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(data);
+      }
+    });
+  });
+
+  return promise;
+};
+
+module.exports = {
+  getTweets,
+};

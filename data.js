@@ -1,6 +1,10 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
+const getTweets = require('./index.js').getTweets;
 
+const addZeroIfSingleDigit = require('./helpers.js').addZeroIfSingleDigit;
+const getDateObject = require('./helpers.js').getDateObject;
+const monthIndex = require('./helpers.js').monthIndex;
 const stripStr = require('./helpers.js').stripStr;
 const sanitizeText = require('./helpers.js').sanitizeText;
 
@@ -33,7 +37,22 @@ let getData = html => {
 
   // all today's date to data obj
   const fullDate = sanitizeText($(today));
-  data['todaysDate'] = fullDate;
+  const dateObject = getDateObject(fullDate);
+
+  let tweetCreatedAt;
+  getTweets().then(tweets => {
+    const tweetedToday = tweets.filter(tweet => {
+      const createdAt = new Date(tweet.created_at);
+      const today = new Date(dateObject.year, dateObject.month, dateObject.day);
+
+      return createdAt.getFullYear() === today.getFullYear() &&
+      createdAt.getMonth() === today.getMonth() &&
+      createdAt.getDate() === today.getDate();
+    })
+    console.log(tweetedToday.length);
+  });
+
+
 
   // rowspan = how many events there are today
   const numberOfDailyEvents = $(today).attr('rowspan');
@@ -60,7 +79,6 @@ let getData = html => {
   // add events to data obj
   data['events'] = eventList;
 
-  console.log(data);
   return data;
 };
 

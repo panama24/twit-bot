@@ -1,57 +1,67 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 
+const stripStr = require('./helpers.js').stripStr;
+const sanitizeText = require('./helpers.js').sanitizeText;
+
 const URL = 'https://factba.se/topic/calendar';
 
-const removeWhiteSpace = str => str.replace(/\s\s+/g, ' ');
 let getData = html => {
   const $ = cheerio.load(html);
 
   data = {};
 
-  const monthlyStats = $('.agenda-month', '#calendar_rows').text();
-  const sanitizedStats = removeWhiteSpace(monthlyStats).split('\t');
+  const agendaMonthStats = $('.agenda-month', '#calendar_rows').text();
+  const stats = stripStr(agendaMonthStats);
 
-  const calendarRows = $('#calendar_rows').each((i, row) => {
-    const dates = $('td[class=agenda-date]').toArray();
-    const today = dates[0];
+  stats.map(str => {
+    const stat = str.split(': ');
+    if (stat[0].includes('Tweet')) {
+      data['numberOfTweets'] = stat[1];
+    };
+    if (stat[0].includes('Golf')) {
+      data['daysOfGolf'] = stat[1];
+    };
+    if (stat[0].includes('Property')) {
+      data['daysOnTrumpProperty'] = stat[1];
+    };
+  }).filter(Boolean);
 
-    const rowspan = $(today).attr('rowspan');
-    const times = $('.agenda-time, .timefirst').toArray();
-    const agendaEvents = $('td[class=agenda-events]').toArray();
+  // get today's date
+  const allAgendaDates = $('td[class=agenda-date]').toArray();
+  const today = allAgendaDates[0];
 
-    const todaysTimes = times.slice(0, rowspan);
-    const todaysEvents = agendaEvents.slice(0, rowspan);
+  // all today's date to data obj
+  const fullDate = sanitizeText($(today));
+  data['todaysDate'] = fullDate;
 
-    let eventList = [];
-    $(todaysTimes).each((i, time) => {
-      const eventTime = $(time)
-        .text()
-        .replace(/[\n\t\r]/g,"")
-        .split(', ')
-        .join();
-      const todaysEvent = todaysEvents[i];
-      const event = $(todaysEvent)
-        .text()
-        .replace(/[\n\t\r]/g,"")
-        .split(', ')
-        .join();
+  // rowspan = how many events there are today
+  const numberOfDailyEvents = $(today).attr('rowspan');
 
-      eventList.push({ eventTime, event });
-    });
+  // get times for all of today's events
+  const eventTimes = $('.agenda-time, .timefirst').toArray();
+  const timesOfTodaysEvents = eventTimes.slice(0, numberOfDailyEvents);
 
-    const fullDate = $(today)
-      .text()
-      .replace(/[\n\t\r]/g,"")
-      .split(', ')
-      .join();
+  // get all events
+  const allAgendaEvents = $('td[class=agenda-events]').toArray();
+  // get today's events
+  const todaysEvents = allAgendaEvents.slice(0, numberOfDailyEvents);
 
-    data['monthlyStats'] = sanitizedStats;
-    data['todaysDate'] = fullDate;
-    data['events'] = eventList;
+  // create a list of today's events: [{ time, event }];
+  let eventList = [];
+  $(timesOfTodaysEvents).each((i, time) => {
+    const eventTime = sanitizeText($(time));
+    const todaysEvent = todaysEvents[i];
+    const event = sanitizeText($(todaysEvent));
 
-    console.log(data);
+    eventList.push({ eventTime, event });
   });
+
+  // add events to data obj
+  data['events'] = eventList;
+
+  console.log(data);
+  return data;
 };
 
 axios.get(URL)

@@ -5,8 +5,8 @@ const getTweets = require('./index.js').getTweets;
 const addZeroIfSingleDigit = require('./helpers.js').addZeroIfSingleDigit;
 const getDateObject = require('./helpers.js').getDateObject;
 const monthIndex = require('./helpers.js').monthIndex;
-const stripStr = require('./helpers.js').stripStr;
 const sanitizeText = require('./helpers.js').sanitizeText;
+const stripStr = require('./helpers.js').stripStr;
 
 const URL = 'https://factba.se/topic/calendar';
 
@@ -31,16 +31,62 @@ let getData = html => {
     };
   }).filter(Boolean);
 
-  // get today's date
+  // today's date
   const allAgendaDates = $('td[class=agenda-date]').toArray();
   const today = allAgendaDates[0];
 
-  // all today's date to data obj
+  // use today's date to get date obj
   const fullDate = sanitizeText($(today));
   const dateObject = getDateObject(fullDate);
 
-  let tweetCreatedAt;
+  // number of events today
+  const numberOfDailyEvents = $(today).attr('rowspan');
+
+  // times of today's events
+  const eventTimes = $('.agenda-time, .timefirst').toArray();
+  const timesOfTodaysEvents = eventTimes.slice(0, numberOfDailyEvents);
+
+  // all events
+  const allAgendaEvents = $('td[class=agenda-events]').toArray();
+  const todaysEvents = allAgendaEvents.slice(0, numberOfDailyEvents);
+
+  // create a list of today's events: [{ time, event }];
+  let eventList = [];
+  $(timesOfTodaysEvents).each((i, time) => {
+    let tweetThreshold;
+    let eventTime = $(time).find('p').text();
+
+    if (!!eventTime) {
+      const nbsp = String.fromCharCode(160);
+      const [timeStr, modifier] = eventTime.split(nbsp);
+      let [hours, minutes] = timeStr.split(':');
+      if (hours === '12') {
+        hours = '00';
+      }
+
+      if (modifier === 'PM') {
+        hours = parseInt(hours, 10) + 12;
+      }
+
+      eventTime = `${hours}:${minutes}`;
+      tweetThreshold = `${Number(hours) + 12}:${minutes}`;
+    };
+
+    const todaysEvent = todaysEvents[i];
+    const event = sanitizeText($(todaysEvent));
+
+    eventList.push({
+      militaryEventTime: eventTime,
+      event,
+      tweetThreshold: tweetThreshold || '',
+    });
+  });
+
+  data['events'] = eventList;
+
+  // probably want to send cal data to tweet file since the ultimate goal is to make a tweet
   getTweets().then(tweets => {
+    // reduce???
     const tweetedToday = tweets.filter(tweet => {
       const createdAt = new Date(tweet.created_at);
       const today = new Date(dateObject.year, dateObject.month, dateObject.day);
@@ -48,37 +94,34 @@ let getData = html => {
       return createdAt.getFullYear() === today.getFullYear() &&
       createdAt.getMonth() === today.getMonth() &&
       createdAt.getDate() === today.getDate();
-    })
-    console.log(tweetedToday.length);
+    });
+
+    // reduce??
+    const replies = tweetedToday.map(tweet => {
+      const createdAt = new Date(tweet.created_at);
+      const tweetHour = `${createdAt.getHours()}:00`;
+
+      const scheduledEvent = eventList.filter(({
+        militaryEventTime,
+        tweetThreshold,
+      }) =>
+        tweetHour <= tweetThreshold &&
+        tweetHour >= militaryEventTime
+      );
+
+      return !!scheduledEvent.length && {
+        event: scheduledEvent[0].event,
+        tweet: tweet.text,
+      };
+    }).filter(Boolean);
+
+    console.log(replies);
+    // handle no events
   });
 
 
 
-  // rowspan = how many events there are today
-  const numberOfDailyEvents = $(today).attr('rowspan');
-
-  // get times for all of today's events
-  const eventTimes = $('.agenda-time, .timefirst').toArray();
-  const timesOfTodaysEvents = eventTimes.slice(0, numberOfDailyEvents);
-
-  // get all events
-  const allAgendaEvents = $('td[class=agenda-events]').toArray();
-  // get today's events
-  const todaysEvents = allAgendaEvents.slice(0, numberOfDailyEvents);
-
-  // create a list of today's events: [{ time, event }];
-  let eventList = [];
-  $(timesOfTodaysEvents).each((i, time) => {
-    const eventTime = sanitizeText($(time));
-    const todaysEvent = todaysEvents[i];
-    const event = sanitizeText($(todaysEvent));
-
-    eventList.push({ eventTime, event });
-  });
-
-  // add events to data obj
-  data['events'] = eventList;
-
+  // console.log(data)
   return data;
 };
 

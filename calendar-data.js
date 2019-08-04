@@ -1,12 +1,12 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
-const getTweets = require('./index.js').getTweets;
 
-const addZeroIfSingleDigit = require('./helpers.js').addZeroIfSingleDigit;
-const getDateObject = require('./helpers.js').getDateObject;
-const monthIndex = require('./helpers.js').monthIndex;
-const sanitizeText = require('./helpers.js').sanitizeText;
-const strip = require('./helpers.js').strip;
+const getTweets = require('./index.js').getTweets;
+const addZeroIfSingleDigit = require('./helpers/utils.js').addZeroIfSingleDigit;
+const getDateObject = require('./helpers/utils.js').getDateObject;
+const monthIndex = require('./helpers/utils.js').monthIndex;
+const sanitizeText = require('./helpers/utils.js').sanitizeText;
+const strip = require('./helpers/utils.js').strip;
 
 const URL = 'https://factba.se/topic/calendar';
 
@@ -128,7 +128,6 @@ let getData = html => {
     }
 
     console.log(replyObject);
-    // constructTweet()
   });
   return data;
 };

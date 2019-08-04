@@ -1,4 +1,4 @@
-const stripStr = str => str.replace(/\s\s+/g, ' ').split('\t');
+const strip = str => str.replace(/\s\s+/g, ' ').split('\t');
 const sanitizeText = text => text
   .text()
   .replace(/[\n\t\r]/g,"")
@@ -10,34 +10,29 @@ const monthNames = [
   'August', 'September', 'October', 'November', 'December'
 ];
 
-// 7 or 10
 const monthIndex = month => {
   const index =  String(monthNames.indexOf(month));
   return addZeroIfSingleDigit(index);
 };
 
+// 7 --> 07
 const addZeroIfSingleDigit = num => num.length === 1 ? ('0' + num) : num;
 
 const getDateObject = fullDate => {
-  // parsing the date a.k.a. what a fucking nightmare
   // [ '3', ' Saturday', ' August', ' 2019' ]
   const todaysDate = fullDate
     .replace(/([A-Z])/g, ", $1")
     .split(',');
 
+  // remove day of week
   todaysDate.splice(1, 1)
-  // [ '3', 'August', '2019' ]
-  const trimmed = todaysDate
+  const [day, month, year] = todaysDate
     .slice(0)
     .map(str => str.trim());
 
-  const day = addZeroIfSingleDigit(trimmed[0]);
-  const month = monthIndex(trimmed[1]);
-  const year = trimmed[2];
-
   return {
-    day,
-    month,
+    day: addZeroIfSingleDigit(day),
+    month: monthIndex(month),
     year,
   };
 };
@@ -47,5 +42,5 @@ module.exports = {
   getDateObject,
   monthIndex,
   sanitizeText,
-  stripStr,
+  strip,
 }

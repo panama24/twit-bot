@@ -6,107 +6,115 @@ const addZeroIfSingleDigit = require('./helpers.js').addZeroIfSingleDigit;
 const getDateObject = require('./helpers.js').getDateObject;
 const monthIndex = require('./helpers.js').monthIndex;
 const sanitizeText = require('./helpers.js').sanitizeText;
-const stripStr = require('./helpers.js').stripStr;
+const strip = require('./helpers.js').strip;
 
 const URL = 'https://factba.se/topic/calendar';
 
-let getData = html => {
-  const $ = cheerio.load(html);
+const buildMonthlyStats = ($, dataObj) => {
+  const monthlyStats = $('.agenda-month', '#calendar_rows').text();
 
-  data = {};
+  strip(monthlyStats).map(stat => {
+    const [key, value] = stat.split(': ');
 
-  const agendaMonthStats = $('.agenda-month', '#calendar_rows').text();
-  const stats = stripStr(agendaMonthStats);
-
-  stats.map(str => {
-    const stat = str.split(': ');
-    if (stat[0].includes('Tweet')) {
-      data['numberOfTweets'] = stat[1];
+    if (key.includes('Tweet')) {
+      dataObj['numberOfTweets'] = value;
     };
-    if (stat[0].includes('Golf')) {
-      data['daysOfGolf'] = stat[1];
+    if (key.includes('Golf')) {
+      dataObj['daysOfGolf'] = value;
     };
-    if (stat[0].includes('Property')) {
-      data['daysOnTrumpProperty'] = stat[1];
+    if (key.includes('Property')) {
+      dataObj['daysOnTrumpProperty'] = value;
     };
   }).filter(Boolean);
+};
 
-  // today's date
+
+const buildEventList = (
+  $,
+  eventList,
+  eventTimesOfTheDay,
+  eventsOfTheDay,
+) => (
+  $(eventTimesOfTheDay).each((i, time) => {
+    let tweetEventThreshold;
+    let timeOfEvent = $(time).find('p').text();
+
+    if (!!timeOfEvent) {
+      const nbsp = String.fromCharCode(160);
+      const [time, modifier] = timeOfEvent.split(nbsp);
+      let [hrs, mins] = time.split(':');
+
+      if (hrs === '12') {
+        hrs = '00';
+      }
+      if (modifier === 'PM') {
+        hrs = parseInt(hrs, 10) + 12;
+      }
+      timeOfEvent = `${hrs}:${mins}`;
+      tweetEventThreshold = `${Number(hrs) + 1}:${mins}`;
+    };
+
+    eventList.push({
+      timeOfEventOn24HrClock: timeOfEvent,
+      event: sanitizeText($(eventsOfTheDay[i])),
+      tweetEventThreshold: tweetEventThreshold || '',
+    });
+  })
+);
+
+
+let getData = html => {
+  const $ = cheerio.load(html);
+  let data = {};
+  let eventList = [];
+
+  buildMonthlyStats($, data);
+
   const allAgendaDates = $('td[class=agenda-date]').toArray();
   const today = allAgendaDates[0];
-
-  // use today's date to get date obj
   const fullDate = sanitizeText($(today));
   const dateObject = getDateObject(fullDate);
 
-  // number of events today
-  const numberOfDailyEvents = $(today).attr('rowspan');
+  const eventCount = $(today).attr('rowspan');
+  const eventTimesOfTheDay = $('.agenda-time, .timefirst')
+    .toArray()
+    .slice(0, eventCount);
 
-  // times of today's events
-  const eventTimes = $('.agenda-time, .timefirst').toArray();
-  const timesOfTodaysEvents = eventTimes.slice(0, numberOfDailyEvents);
+  const eventsOfTheDay = $('td[class=agenda-events]')
+    .toArray()
+    .slice(0, eventCount);
 
-  // all events
-  const allAgendaEvents = $('td[class=agenda-events]').toArray();
-  const todaysEvents = allAgendaEvents.slice(0, numberOfDailyEvents);
-
-  // create a list of today's events: [{ time, event }];
-  let eventList = [];
-  $(timesOfTodaysEvents).each((i, time) => {
-    let tweetThreshold;
-    let eventTime = $(time).find('p').text();
-
-    if (!!eventTime) {
-      const nbsp = String.fromCharCode(160);
-      const [timeStr, modifier] = eventTime.split(nbsp);
-      let [hours, minutes] = timeStr.split(':');
-      if (hours === '12') {
-        hours = '00';
-      }
-
-      if (modifier === 'PM') {
-        hours = parseInt(hours, 10) + 12;
-      }
-
-      eventTime = `${hours}:${minutes}`;
-      tweetThreshold = `${Number(hours) + 12}:${minutes}`;
-    };
-
-    const todaysEvent = todaysEvents[i];
-    const event = sanitizeText($(todaysEvent));
-
-    eventList.push({
-      militaryEventTime: eventTime,
-      event,
-      tweetThreshold: tweetThreshold || '',
-    });
-  });
-
-  data['events'] = eventList;
+  buildEventList(
+    $,
+    eventList,
+    eventTimesOfTheDay,
+    eventsOfTheDay,
+  );
 
   // probably want to send cal data to tweet file since the ultimate goal is to make a tweet
   getTweets().then(tweets => {
     // reduce???
-    const tweetedToday = tweets.filter(tweet => {
-      const createdAt = new Date(tweet.created_at);
-      const today = new Date(dateObject.year, dateObject.month, dateObject.day);
+    const tweetsFromToday = tweets.filter(tweet => {
+      const tweetedAt = new Date(tweet.created_at);
+      const { day, month, year } = dateObject;
+      const today = new Date(year, month, day);
 
-      return createdAt.getFullYear() === today.getFullYear() &&
-      createdAt.getMonth() === today.getMonth() &&
-      createdAt.getDate() === today.getDate();
+      return tweetedAt.getFullYear() === today.getFullYear() &&
+      tweetedAt.getMonth() === today.getMonth() &&
+      tweetedAt.getDate() === today.getDate();
     });
 
     // reduce??
-    const replies = tweetedToday.map(tweet => {
-      const createdAt = new Date(tweet.created_at);
-      const tweetHour = `${createdAt.getHours()}:00`;
+    const replyObject = tweetsFromToday.map(tweet => {
+      const tweetedAt = new Date(tweet.created_at);
+      const tweetHour = `${tweetedAt.getHours()}:00`;
 
       const scheduledEvent = eventList.filter(({
-        militaryEventTime,
-        tweetThreshold,
+        timeOfEventOn24HrClock,
+        tweetEventThreshold,
       }) =>
-        tweetHour <= tweetThreshold &&
-        tweetHour >= militaryEventTime
+        tweetHour <= tweetEventThreshold &&
+        tweetHour >= timeOfEventOn24HrClock
       );
 
       return !!scheduledEvent.length && {
@@ -115,13 +123,13 @@ let getData = html => {
       };
     }).filter(Boolean);
 
-    console.log(replies);
-    // handle no events
+    if (!!replyObject.length) {
+      return;
+    }
+
+    console.log(replyObject);
+    // constructTweet()
   });
-
-
-
-  // console.log(data)
   return data;
 };
 
